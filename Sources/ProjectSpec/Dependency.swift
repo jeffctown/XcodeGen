@@ -36,6 +36,7 @@ public struct Dependency: Equatable {
     public enum CarthageLinkType: String {
         case dynamic
         case `static`
+		case xcframework
 
         public static let `default` = dynamic
     }

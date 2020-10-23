@@ -24,6 +24,7 @@ public class PBXProjGenerator {
     var packageReferences: [String: XCRemoteSwiftPackageReference] = [:]
 
     var carthageFrameworksByPlatform: [String: Set<PBXFileElement>] = [:]
+	var carthageXCFrameworks = Set<PBXFileElement>()
     var frameworkFiles: [PBXFileElement] = []
     var bundleFiles: [PBXFileElement] = []
 
@@ -225,8 +226,8 @@ public class PBXProjGenerator {
         try project.targets.forEach(generateTarget)
         try project.aggregateTargets.forEach(generateAggregateTarget)
 
-        if !carthageFrameworksByPlatform.isEmpty {
-            var platforms: [PBXGroup] = []
+		if !carthageFrameworksByPlatform.isEmpty || !carthageXCFrameworks.isEmpty {
+            var carthageGroupChildren: [PBXFileElement] = []
             for (platform, files) in carthageFrameworksByPlatform {
                 let platformGroup: PBXGroup = addObject(
                     PBXGroup(
@@ -235,11 +236,16 @@ public class PBXProjGenerator {
                         path: platform
                     )
                 )
-                platforms.append(platformGroup)
+				carthageGroupChildren.append(platformGroup)
             }
+
+			for xcframework in carthageXCFrameworks {
+				carthageGroupChildren.append(xcframework)
+			}
+
             let carthageGroup = addObject(
                 PBXGroup(
-                    children: platforms,
+                    children: carthageGroupChildren,
                     sourceTree: .group,
                     name: "Carthage",
                     path: carthageResolver.buildPath
@@ -853,12 +859,20 @@ public class PBXProjGenerator {
 
                     let platformPath = Path(carthageResolver.buildPath(for: target.platform, linkType: linkType))
                     var frameworkPath = platformPath + dependency.reference
-                    if frameworkPath.extension == nil {
-                        frameworkPath = Path(frameworkPath.string + ".framework")
+					if frameworkPath.extension == nil {
+						if linkType == .xcframework {
+							frameworkPath = Path(frameworkPath.string + ".xcframework")
+						} else {
+							frameworkPath = Path(frameworkPath.string + ".framework")
+						}
                     }
                     let fileReference = self.sourceGenerator.getFileReference(path: frameworkPath, inPath: platformPath)
 
-                    self.carthageFrameworksByPlatform[target.platform.carthageName, default: []].insert(fileReference)
+					if linkType == .xcframework {
+						self.carthageXCFrameworks.insert(fileReference)
+					} else {
+						self.carthageFrameworksByPlatform[target.platform.carthageName, default: []].insert(fileReference)
+					}
 
                     let isStaticLibrary = target.type == .staticLibrary
                     let isCarthageStaticLink = dependency.carthageLinkType == .static
@@ -937,11 +951,15 @@ public class PBXProjGenerator {
             let platformPath = Path(carthageResolver.buildPath(for: target.platform, linkType: dependency.carthageLinkType ?? .default))
             var frameworkPath = platformPath + dependency.reference
             if frameworkPath.extension == nil {
-                frameworkPath = Path(frameworkPath.string + ".framework")
+				if dependency.carthageLinkType == .xcframework {
+					frameworkPath = Path(frameworkPath.string + ".xcframework")
+				} else {
+					frameworkPath = Path(frameworkPath.string + ".framework")
+				}
             }
             let fileReference = sourceGenerator.getFileReference(path: frameworkPath, inPath: platformPath)
 
-            if dependency.carthageLinkType == .static {
+			if dependency.carthageLinkType == .static || dependency.carthageLinkType == .xcframework {
                 guard isFromTopLevelTarget else { continue } // ignore transitive dependencies if static
                 let linkFile = addObject(
                     PBXBuildFile(file: fileReference, settings: getDependencyFrameworkSettings(dependency: dependency))

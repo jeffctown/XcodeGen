@@ -46,6 +46,8 @@ public class CarthageDependencyResolver {
             return "\(buildPath)/\(platform.carthageName)/Static"
         case .dynamic:
             return "\(buildPath)/\(platform.carthageName)"
+		case .xcframework:
+			return "\(buildPath)"
         }
     }
 
