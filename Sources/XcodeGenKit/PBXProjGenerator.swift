@@ -943,29 +943,26 @@ public class PBXProjGenerator {
             }
         }
 
-        for carthageDependency in carthageDependencies {
+		for carthageDependency in carthageDependencies {
             let dependency = carthageDependency.dependency
+			guard dependency.carthageLinkType != .xcframework else { continue }
             let isFromTopLevelTarget = carthageDependency.isFromTopLevelTarget
             let embed = dependency.embed ?? target.shouldEmbedCarthageDependencies
 
             let platformPath = Path(carthageResolver.buildPath(for: target.platform, linkType: dependency.carthageLinkType ?? .default))
             var frameworkPath = platformPath + dependency.reference
             if frameworkPath.extension == nil {
-				if dependency.carthageLinkType == .xcframework {
-					frameworkPath = Path(frameworkPath.string + ".xcframework")
-				} else {
-					frameworkPath = Path(frameworkPath.string + ".framework")
-				}
+				frameworkPath = Path(frameworkPath.string + ".framework")
             }
             let fileReference = sourceGenerator.getFileReference(path: frameworkPath, inPath: platformPath)
 
-			if dependency.carthageLinkType == .static || dependency.carthageLinkType == .xcframework {
+			if dependency.carthageLinkType == .static {
                 guard isFromTopLevelTarget else { continue } // ignore transitive dependencies if static
                 let linkFile = addObject(
                     PBXBuildFile(file: fileReference, settings: getDependencyFrameworkSettings(dependency: dependency))
                 )
                 targetFrameworkBuildFiles.append(linkFile)
-            } else if embed {
+			} else if embed {
                 if directlyEmbedCarthage {
                     let embedFile = addObject(
                         PBXBuildFile(file: fileReference, settings: getEmbedSettings(dependency: dependency, codeSign: dependency.codeSign ?? true))
